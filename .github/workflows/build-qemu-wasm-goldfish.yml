@@ -138,7 +138,8 @@ jobs:
                 --with-coroutine=fiber \
                 --disable-tools \
                 --disable-docs \
-                --extra-cflags="-DNDEBUG" &&
+                --extra-cflags="-DNDEBUG -Wno-error=unused-command-line-argument" \
+                --extra-cxxflags="-Wno-error=unused-command-line-argument" &&
               emmake make -j$(nproc)
             '
 
