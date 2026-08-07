@@ -1,0 +1,123 @@
+name: build-qemu-wasm-goldfish
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - "goldfish-patches/**"
+      - ".github/workflows/build-qemu-wasm-goldfish.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Seu repositorio: precisa conter a pasta goldfish-patches/ com
+      # os arquivos .c/.h e o script integrate-goldfish.sh
+      - name: Checkout deste repositorio
+        uses: actions/checkout@v4
+        with:
+          path: patches
+
+      # Base: QEMU moderno + backend TCG para WebAssembly
+      - name: Clonar qemu-wasm
+        run: git clone --depth 1 https://github.com/ktock/qemu-wasm.git qemu-wasm
+
+      # Copia os novos arquivos de dispositivo/maquina goldfish para
+      # dentro da arvore do qemu-wasm
+      - name: Instalar os arquivos da placa goldfish
+        run: |
+          set -eu
+          SRC=patches/goldfish-patches
+          DST=qemu-wasm
+
+          mkdir -p "$DST/hw/arm" "$DST/hw/timer" "$DST/include/hw/timer"
+
+          cp "$SRC/hw_arm_goldfish.c" "$DST/hw/arm/goldfish.c"
+          cp "$SRC/hw_timer_goldfish_timer.c" "$DST/hw/timer/goldfish_timer.c"
+          cp "$SRC/include_hw_timer_goldfish_timer.h" \
+             "$DST/include/hw/timer/goldfish_timer.h"
+
+      # Registra os arquivos novos no Kconfig/meson.build. Feito por
+      # append idempotente (nao patch de linha) porque nao temos como
+      # validar numero de linha exato sem o checkout real do repo.
+      - name: Registrar a placa goldfish no build system
+        run: |
+          set -eu
+          cd qemu-wasm
+
+          add_once() {
+            # add_once <arquivo> <marcador-de-idempotencia> <texto>
+            local file="$1" marker="$2" text="$3"
+            if ! grep -qF "$marker" "$file" 2>/dev/null; then
+              printf '%s\n' "$text" >> "$file"
+            fi
+          }
+
+          add_once hw/arm/Kconfig "config GOLDFISH" \
+'
+config GOLDFISH
+    bool
+    select GOLDFISH_PIC
+    select GOLDFISH_TTY
+    select GOLDFISH_TIMER
+'
+
+          add_once hw/timer/Kconfig "config GOLDFISH_TIMER" \
+'
+config GOLDFISH_TIMER
+    bool
+'
+
+          add_once hw/arm/meson.build "goldfish.c" \
+"arm_ss.add(when: 'CONFIG_GOLDFISH', if_true: files('goldfish.c'))"
+
+          add_once hw/timer/meson.build "goldfish_timer.c" \
+"softmmu_ss.add(when: 'CONFIG_GOLDFISH_TIMER', if_true: files('goldfish_timer.c'))"
+
+          # Habilita a placa por padrao neste build arm-softmmu
+          DEFCONFIG="configs/devices/arm-softmmu/default.mak"
+          if [ -f "$DEFCONFIG" ]; then
+            add_once "$DEFCONFIG" "CONFIG_GOLDFISH=y" "CONFIG_GOLDFISH=y"
+          fi
+
+      # Aplica qualquer patch adicional versionado à parte (para
+      # ajustes finos que não caibam no add_once acima)
+      - name: Aplicar patches adicionais (se existirem)
+        run: |
+          set -eu
+          if [ -d patches/goldfish-patches/diffs ]; then
+            cd qemu-wasm
+            for p in ../patches/goldfish-patches/diffs/*.patch; do
+              [ -e "$p" ] || continue
+              echo "Aplicando $p"
+              git apply --3way "$p"
+            done
+          fi
+
+      - name: Build da imagem de toolchain (emsdk + libs)
+        run: docker build -t buildqemu -f qemu-wasm/Dockerfile qemu-wasm
+
+      - name: Compilar QEMU (goldfish) para WebAssembly
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/qemu-wasm:/qemu \
+            buildqemu \
+            /bin/bash -lc '
+              cd /qemu &&
+              emconfigure ./configure \
+                --target-list=arm-softmmu \
+                --disable-tools \
+                --disable-docs \
+                --extra-cflags="-DNDEBUG" &&
+              emmake make -j$(nproc)
+            '
+
+      - name: Upload dos artefatos wasm
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-wasm-goldfish-build
+          path: |
+            qemu-wasm/build/**/*.wasm
+            qemu-wasm/build/**/*.js
+          if-no-files-found: warn
