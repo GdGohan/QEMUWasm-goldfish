@@ -110,9 +110,13 @@ jobs:
       - name: Corrigir URL do zlib no Dockerfile do qemu-wasm
         run: |
           set -eu
-          sed -i -E 's#https://zlib\.net/zlib-\$\{?ZLIB_VERSION\}?\.tar\.xz#https://zlib.net/fossils/zlib-${ZLIB_VERSION}.tar.xz#' \
+          # fossils/ só guarda .tar.gz, não .tar.xz — então trocamos
+          # a extensão e a flag do tar (xJC -> xzC) junto com o host
+          sed -i -E \
+            -e 's#https://zlib\.net/zlib-\$\{?ZLIB_VERSION\}?\.tar\.xz#https://zlib.net/fossils/zlib-${ZLIB_VERSION}.tar.gz#' \
+            -e 's#(curl[^|]*zlib[^|]*\|\s*tar\s+)xJC#\1xzC#' \
             qemu-wasm/Dockerfile
-          grep -n "zlib.net" qemu-wasm/Dockerfile || true
+          grep -n "zlib.net\|tar x" qemu-wasm/Dockerfile || true
 
       - name: Build da imagem de toolchain (emsdk + libs)
         run: docker build -t buildqemu -f qemu-wasm/Dockerfile qemu-wasm
