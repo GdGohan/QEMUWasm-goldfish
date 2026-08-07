@@ -78,7 +78,7 @@ jobs:
 
           add_once hw/arm/meson.build "goldfish_pdev_bus.c" "arm_ss.add(when: 'CONFIG_GOLDFISH_PDEV_BUS', if_true: files('goldfish_pdev_bus.c'))"
 
-          add_once hw/timer/meson.build "goldfish_timer.c" "softmmu_ss.add(when: 'CONFIG_GOLDFISH_TIMER', if_true: files('goldfish_timer.c'))"
+          add_once hw/timer/meson.build "goldfish_timer.c" "system_ss.add(when: 'CONFIG_GOLDFISH_TIMER', if_true: files('goldfish_timer.c'))"
 
           DEFCONFIG="configs/devices/arm-softmmu/default.mak"
           if [ -f "$DEFCONFIG" ]; then
