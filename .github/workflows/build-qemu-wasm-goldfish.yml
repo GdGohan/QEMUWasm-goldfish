@@ -129,7 +129,13 @@ jobs:
             /bin/bash -lc '
               cd /qemu &&
               emconfigure ./configure \
+                --static \
+                --cpu=wasm32 \
+                --cross-prefix= \
                 --target-list=arm-softmmu \
+                --without-default-features \
+                --enable-system \
+                --with-coroutine=fiber \
                 --disable-tools \
                 --disable-docs \
                 --extra-cflags="-DNDEBUG" &&
