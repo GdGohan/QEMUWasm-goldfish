@@ -71,6 +71,7 @@
 #include "hw/core/cpu.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
+#include "exec/cpu-all.h"
 
 #define PDEV_BUS_OP_DONE         0x00
 #define PDEV_BUS_OP_REMOVE_DEV   0x04
