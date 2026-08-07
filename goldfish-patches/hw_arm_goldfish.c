@@ -34,6 +34,8 @@
 #include "hw/sysbus.h"
 #include "exec/address-spaces.h"
 #include "cpu.h"
+#include "hw/qdev-properties-system.h"   /* qdev_prop_set_chr */
+#include "sysemu/sysemu.h"               /* serial_hd */
 
 #define GOLDFISH_IO_BASE        0xff000000
 #define GOLDFISH_PIC_OFFSET     0x00000
