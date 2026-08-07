@@ -31,60 +31,59 @@ jobs:
           SRC=patches/goldfish-patches
           DST=qemu-wasm
 
-          mkdir -p "$DST/hw/arm" "$DST/hw/timer" "$DST/include/hw/timer"
+          mkdir -p "$DST/hw/arm" "$DST/hw/timer" \
+                   "$DST/include/hw/timer" "$DST/include/hw/arm"
 
           cp "$SRC/hw_arm_goldfish.c" "$DST/hw/arm/goldfish.c"
+          cp "$SRC/hw_arm_goldfish_pdev_bus.c" "$DST/hw/arm/goldfish_pdev_bus.c"
           cp "$SRC/hw_timer_goldfish_timer.c" "$DST/hw/timer/goldfish_timer.c"
           cp "$SRC/include_hw_timer_goldfish_timer.h" \
              "$DST/include/hw/timer/goldfish_timer.h"
+          cp "$SRC/include_hw_arm_goldfish_pdev_bus.h" \
+             "$DST/include/hw/arm/goldfish_pdev_bus.h"
 
       # Registra os arquivos novos no Kconfig/meson.build. Feito por
       # append idempotente (nao patch de linha) porque nao temos como
       # validar numero de linha exato sem o checkout real do repo.
+      #
+      # IMPORTANTE: todo o texto multi-linha usado aqui e passado via
+      # printf com '\n' explicito, numa unica linha logica de shell --
+      # de proposito, para nunca ter uma linha com indentacao menor
+      # que a deste bloco "run: |". Um heredoc ou string literal com
+      # quebras de linha reais "cruas" dentro deste bloco fecharia o
+      # bloco YAML mais cedo do que o esperado (qualquer linha com
+      # indentacao abaixo da primeira linha do bloco termina o
+      # literal), e o restante seria interpretado como YAML solto,
+      # quebrando o workflow.
       - name: Registrar a placa goldfish no build system
-          run: |
-            set -eu
-            cd qemu-wasm
+        run: |
+          set -eu
+          cd qemu-wasm
 
-            add_once() {
-              local file="$1"
-              local marker="$2"
-              local text="$3"
-
-              if ! grep -qF "$marker" "$file" 2>/dev/null; then
-                printf '%s\n' "$text" >> "$file"
-              fi
-            }
-
-            add_once hw/arm/Kconfig "config GOLDFISH" "$(cat <<'EOF'
-        config GOLDFISH
-            bool
-            select GOLDFISH_PIC
-            select GOLDFISH_TTY
-            select GOLDFISH_TIMER
-        EOF
-        )"
-
-            add_once hw/timer/Kconfig "config GOLDFISH_TIMER" "$(cat <<'EOF'
-        config GOLDFISH_TIMER
-            bool
-        EOF
-        )"
-
-            add_once hw/arm/meson.build \
-              "goldfish.c" \
-              "arm_ss.add(when: 'CONFIG_GOLDFISH', if_true: files('goldfish.c'))"
-
-            add_once hw/timer/meson.build \
-              "goldfish_timer.c" \
-              "softmmu_ss.add(when: 'CONFIG_GOLDFISH_TIMER', if_true: files('goldfish_timer.c'))"
-
-            DEFCONFIG=configs/devices/arm-softmmu/default.mak
-            if [ -f "$DEFCONFIG" ]; then
-              add_once "$DEFCONFIG" \
-                "CONFIG_GOLDFISH=y" \
-                "CONFIG_GOLDFISH=y"
+          add_once() {
+            # add_once <arquivo> <marcador-de-idempotencia> <texto>
+            file="$1"; marker="$2"; text="$3"
+            if ! grep -qF "$marker" "$file" 2>/dev/null; then
+              printf '%s\n' "$text" >> "$file"
             fi
+          }
+
+          add_once hw/arm/Kconfig "config GOLDFISH" "$(printf 'config GOLDFISH\n    bool\n    select GOLDFISH_PIC\n    select GOLDFISH_TTY\n    select GOLDFISH_TIMER\n    select GOLDFISH_PDEV_BUS\n')"
+
+          add_once hw/arm/Kconfig "config GOLDFISH_PDEV_BUS" "$(printf 'config GOLDFISH_PDEV_BUS\n    bool\n')"
+
+          add_once hw/timer/Kconfig "config GOLDFISH_TIMER" "$(printf 'config GOLDFISH_TIMER\n    bool\n')"
+
+          add_once hw/arm/meson.build "goldfish.c" "arm_ss.add(when: 'CONFIG_GOLDFISH', if_true: files('goldfish.c'))"
+
+          add_once hw/arm/meson.build "goldfish_pdev_bus.c" "arm_ss.add(when: 'CONFIG_GOLDFISH_PDEV_BUS', if_true: files('goldfish_pdev_bus.c'))"
+
+          add_once hw/timer/meson.build "goldfish_timer.c" "softmmu_ss.add(when: 'CONFIG_GOLDFISH_TIMER', if_true: files('goldfish_timer.c'))"
+
+          DEFCONFIG="configs/devices/arm-softmmu/default.mak"
+          if [ -f "$DEFCONFIG" ]; then
+            add_once "$DEFCONFIG" "CONFIG_GOLDFISH=y" "CONFIG_GOLDFISH=y"
+          fi
 
       # Aplica qualquer patch adicional versionado à parte (para
       # ajustes finos que não caibam no add_once acima)
