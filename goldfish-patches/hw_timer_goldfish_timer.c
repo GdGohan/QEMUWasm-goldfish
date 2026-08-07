@@ -27,8 +27,8 @@
  * extra ao debugar.
  */
 
-#include "qemu/log.h"
 #include "qemu/osdep.h"
+#include "qemu/log.h"
 #include "qapi/error.h"
 #include "hw/sysbus.h"
 #include "hw/irq.h"
