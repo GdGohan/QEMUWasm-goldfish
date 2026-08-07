@@ -99,6 +99,21 @@ jobs:
             done
           fi
 
+      # O Dockerfile do qemu-wasm fixa ZLIB_VERSION=1.3.1 e baixa de
+      # https://zlib.net/zlib-1.3.1.tar.xz. O zlib.net so mantem a
+      # ultima versao nesse caminho direto (hoje 1.3.2) e move
+      # versoes antigas para /fossils/ -- por isso a URL antiga passou
+      # a devolver uma pagina de erro em vez do .tar.xz, e o "tar xJ"
+      # falha com "File format not recognized". Corrige apontando pro
+      # caminho de fossils; se isso tambem falhar no futuro, trocar
+      # pelo mirror do GitHub (github.com/madler/zlib/releases).
+      - name: Corrigir URL do zlib no Dockerfile do qemu-wasm
+        run: |
+          set -eu
+          sed -i -E 's#https://zlib\.net/zlib-\$\{?ZLIB_VERSION\}?\.tar\.xz#https://zlib.net/fossils/zlib-${ZLIB_VERSION}.tar.xz#' \
+            qemu-wasm/Dockerfile
+          grep -n "zlib.net" qemu-wasm/Dockerfile || true
+
       - name: Build da imagem de toolchain (emsdk + libs)
         run: docker build -t buildqemu -f qemu-wasm/Dockerfile qemu-wasm
 
